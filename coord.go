@@ -100,7 +100,7 @@ type electionBackend interface {
 	Campaign(ctx context.Context, val string) error
 	Leader(ctx context.Context) (*clientv3.GetResponse, error)
 	Resign(ctx context.Context) error
-	Observe(ctx context.Context) <-chan clientv3.GetResponse
+	Observe(ctx context.Context) <-chan *clientv3.GetResponse
 }
 
 // HostMetadata is the JSON value stored under each host's liveness key. Keep it
@@ -561,7 +561,9 @@ func (e *Election) Observe(ctx context.Context) <-chan string {
 		defer close(out)
 		ch := e.election.Observe(ctx)
 		for resp := range ch {
-			if len(resp.Kvs) > 0 {
+			// etcd v3.7 changed Observe to a channel of POINTERS, so a nil
+			// element is now representable where it was not before.
+			if resp != nil && len(resp.Kvs) > 0 {
 				select {
 				case out <- string(resp.Kvs[0].Value):
 				case <-ctx.Done():

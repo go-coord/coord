@@ -107,7 +107,7 @@ type fakeBackend struct {
 	leaderResp  *clientv3.GetResponse
 	leaderErr   error
 	resignErr   error
-	observeCh   chan clientv3.GetResponse
+	observeCh   chan *clientv3.GetResponse
 	campaigns   int
 }
 
@@ -119,7 +119,7 @@ func (b *fakeBackend) Leader(ctx context.Context) (*clientv3.GetResponse, error)
 	return b.leaderResp, b.leaderErr
 }
 func (b *fakeBackend) Resign(ctx context.Context) error { return b.resignErr }
-func (b *fakeBackend) Observe(ctx context.Context) <-chan clientv3.GetResponse {
+func (b *fakeBackend) Observe(ctx context.Context) <-chan *clientv3.GetResponse {
 	return b.observeCh
 }
 
@@ -564,11 +564,11 @@ func TestElection_ResignSuccessAndError(t *testing.T) {
 }
 
 func TestElection_Observe(t *testing.T) {
-	obs := make(chan clientv3.GetResponse, 4)
+	obs := make(chan *clientv3.GetResponse, 4)
 	be := &fakeBackend{observeCh: obs}
 	e := &Election{election: be, log: discardLogger()}
-	obs <- clientv3.GetResponse{Kvs: []*mvccpb.KeyValue{{Value: []byte("leader-1")}}} // delivered
-	obs <- clientv3.GetResponse{}                                                     // empty kvs -> skipped
+	obs <- &clientv3.GetResponse{Kvs: []*mvccpb.KeyValue{{Value: []byte("leader-1")}}} // delivered
+	obs <- &clientv3.GetResponse{}                                                     // empty kvs -> skipped
 	close(obs)
 	out := e.Observe(context.Background())
 	got, ok := <-out
@@ -581,13 +581,13 @@ func TestElection_Observe(t *testing.T) {
 }
 
 func TestElection_ObserveContextDone(t *testing.T) {
-	obs := make(chan clientv3.GetResponse, 8)
+	obs := make(chan *clientv3.GetResponse, 8)
 	be := &fakeBackend{observeCh: obs}
 	e := &Election{election: be, log: discardLogger()}
 	ctx, cancel := context.WithCancel(context.Background())
 	// Fill the out buffer (cap 4) + one more so the goroutine parks on send.
 	for i := 0; i < 6; i++ {
-		obs <- clientv3.GetResponse{Kvs: []*mvccpb.KeyValue{{Value: []byte("x")}}}
+		obs <- &clientv3.GetResponse{Kvs: []*mvccpb.KeyValue{{Value: []byte("x")}}}
 	}
 	_ = e.Observe(ctx) // no reader; goroutine fills buffer then blocks on send
 	time.Sleep(50 * time.Millisecond)
