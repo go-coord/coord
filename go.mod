@@ -1,6 +1,6 @@
 module github.com/go-coord/coord
 
-go 1.26.4
+go 1.27.1
 
 require (
 	go.etcd.io/etcd/api/v3 v3.7.2
